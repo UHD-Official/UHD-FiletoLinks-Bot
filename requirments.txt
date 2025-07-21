@@ -1,8 +1,9 @@
-pyrogram
-tgcrypto
 aiohttp
-aiofiles
-motor
+pyrofork
 python-dotenv
-fastapi
-uvicorn
+tgcrypto
+motor
+aiofiles
+dnspython
+requests
+jinja2
