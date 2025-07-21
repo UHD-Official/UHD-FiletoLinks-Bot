@@ -6,3 +6,4 @@ motor
 python-dotenv
 fastapi
 uvicorn
+pip install -r requirements.txt
