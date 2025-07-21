@@ -1,0 +1,8 @@
+pyrogram
+tgcrypto
+aiohttp
+aiofiles
+motor
+python-dotenv
+fastapi
+uvicorn
