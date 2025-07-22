@@ -27,12 +27,11 @@ class Telegram:
     AUTH_USERS = list(set(int(x) for x in str(env.get("AUTH_USERS", "1900118264")).split()))
 
 class Server:
-    PORT = int(env.get("PORT", 8080))
-    BIND_ADDRESS = str(env.get("BIND_ADDRESS", "0.0.0.0"))
-    PING_INTERVAL = int(env.get("PING_INTERVAL", "1200"))
-    HAS_SSL = str(env.get("HAS_SSL", "0").lower()) in ("1", "true", "t", "yes", "y")
-    NO_PORT = str(env.get("NO_PORT", "0").lower()) in ("1", "true", "t", "yes", "y")
-    FQDN = str(env.get("FQDN", horrible-gibbon-gdrives7511-2e5eec70.koyeb.app/))
-    URL = "http{}://{}{}/".format(
-        "s" if HAS_SSL else "", FQDN, "" if NO_PORT else ":" + str(PORT)
-    )
+    PORT = int(os.getenv("PORT", 8080))
+    BIND_ADDRESS = str(os.getenv("BIND_ADDRESS", "0.0.0.0"))
+    PING_INTERVAL = int(os.getenv("PING_INTERVAL", "1200"))
+    HAS_SSL = str(os.getenv("HAS_SSL", "1")).lower() in ("1", "true", "t", "yes", "y")
+    NO_PORT = True  # Koyeb URLs don't need ports
+    FQDN = str(os.getenv("FQDN", "horrible-gibbon-gdrives7511-2e5eec70.koyeb.app"))  # Fixed: Added quotes
+    
+    URL = f"https://{FQDN}/"  # Force HTTPS on Koyeb
