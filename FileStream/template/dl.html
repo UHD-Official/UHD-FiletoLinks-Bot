@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>UHD | Futuristic Downloader</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --neon-blue: #0ff0fc;
+            --neon-pink: #ff00ff;
+            --dark-space: #0a0a1a;
+        }
+        
+        body {
+            margin: 0;
+            padding: 0;
+            background: var(--dark-space);
+            color: white;
+            font-family: 'Roboto', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .container {
+            text-align: center;
+            max-width: 90%;
+            padding: 30px;
+            background: rgba(10,10,26,0.8);
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0,255,252,0.2);
+            border: 1px solid var(--neon-blue);
+            backdrop-filter: blur(10px);
+        }
+        
+        h1 {
+            font-family: 'Orbitron', sans-serif;
+            color: var(--neon-blue);
+            margin-bottom: 20px;
+            text-shadow: 0 0 10px rgba(0,255,252,0.5);
+        }
+        
+        .progress-container {
+            width: 100%;
+            height: 10px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 5px;
+            margin: 20px 0;
+            overflow: hidden;
+        }
+        
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, var(--neon-blue), var(--neon-pink));
+            width: 0%;
+            transition: width 0.3s;
+        }
+        
+        .download-btn {
+            display: inline-block;
+            background: linear-gradient(45deg, var(--neon-blue), var(--neon-pink));
+            color: var(--dark-space);
+            padding: 12px 30px;
+            text-decoration: none;
+            border-radius: 30px;
+            font-weight: bold;
+            margin: 20px 0;
+            transition: all 0.3s;
+            border: none;
+            cursor: pointer;
+            font-family: 'Orbitron', sans-serif;
+            letter-spacing: 1px;
+            box-shadow: 0 0 15px rgba(0,255,252,0.3);
+        }
+        
+        .download-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 25px rgba(0,255,252,0.5);
+        }
+        
+        .info {
+            margin: 15px 0;
+            color: #aaa;
+        }
+        
+        .speed {
+            font-family: 'Orbitron', sans-serif;
+            color: var(--neon-blue);
+            margin: 10px 0;
+        }
+        
+        .error {
+            color: var(--neon-pink);
+            margin: 20px 0;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+            
+            h1 {
+                font-size: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>ADVANCED DOWNLOAD</h1>
+        <div id="status">Initializing download...</div>
+        <div class="progress-container">
+            <div class="progress-bar" id="progress-bar"></div>
+        </div>
+        <div class="speed" id="speed">Speed: -- MB/s</div>
+        <div class="info" id="file-info">File: --</div>
+        <button id="download-btn" class="download-btn" style="display:none;">DOWNLOAD NOW</button>
+        <div id="error" class="error" style="display:none;"></div>
+    </div>
+
+    <script>
+        class SmartDownloader {
+            constructor() {
+                this.statusElement = document.getElementById('status');
+                this.progressBar = document.getElementById('progress-bar');
+                this.speedElement = document.getElementById('speed');
+                this.fileInfoElement = document.getElementById('file-info');
+                this.downloadBtn = document.getElementById('download-btn');
+                this.errorElement = document.getElementById('error');
+                
+                this.downloadStartTime = 0;
+                this.lastLoaded = 0;
+                this.lastTime = 0;
+                
+                this.initDownload();
+            }
+            
+            async initDownload() {
+                const urlParams = new URLSearchParams(window.location.search);
+                const fileUrl = urlParams.get('url');
+                
+                if (!fileUrl) {
+                    this.showError('No download URL provided');
+                    return;
+                }
+                
+                try {
+                    const decodedUrl = decodeURIComponent(fileUrl);
+                    const fileName = this.extractFileName(decodedUrl);
+                    
+                    this.fileInfoElement.textContent = `File: ${fileName || 'Unknown'}`;
+                    this.statusElement.textContent = 'Preparing download...';
+                    
+                    // First try direct download
+                    this.downloadBtn.style.display = 'inline-block';
+                    this.downloadBtn.onclick = () => this.startDownload(decodedUrl, fileName);
+                    
+                    // For large files, try service worker-based download
+                    if ('serviceWorker' in navigator) {
+                        await this.initServiceWorkerDownload(decodedUrl, fileName);
+                    } else {
+                        this.statusElement.textContent = 'Click button to download';
+                    }
+                    
+                } catch (error) {
+                    this.showError('Failed to initialize download: ' + error.message);
+                }
+            }
+            
+            async initServiceWorkerDownload(url, filename) {
+                try {
+                    // Register service worker
+                    const registration = await navigator.serviceWorker.register('/sw-downloader.js');
+                    
+                    // Send download request to service worker
+                    navigator.serviceWorker.controller.postMessage({
+                        type: 'INIT_DOWNLOAD',
+                        url: url,
+                        filename: filename
+                    });
+                    
+                    // Listen for progress updates
+                    navigator.serviceWorker.addEventListener('message', event => {
+                        if (event.data.type === 'DOWNLOAD_PROGRESS') {
+                            this.updateProgress(event.data);
+                        }
+                    });
+                    
+                    this.statusElement.textContent = 'Downloading via advanced method...';
+                    
+                } catch (error) {
+                    console.log('Service worker download failed, fallback to direct:', error);
+                    this.statusElement.textContent = 'Click button to download directly';
+                }
+            }
+            
+            startDownload(url, filename) {
+                this.downloadStartTime = Date.now();
+                this.lastLoaded = 0;
+                this.lastTime = Date.now();
+                
+                const xhr = new XMLHttpRequest();
+                xhr.responseType = 'blob';
+                
+                xhr.addEventListener('progress', (event) => {
+                    if (event.lengthComputable) {
+                        const progress = (event.loaded / event.total) * 100;
+                        this.updateProgress({
+                            loaded: event.loaded,
+                            total: event.total,
+                            progress: progress
+                        });
+                    }
+                });
+                
+                xhr.addEventListener('load', () => {
+                    if (xhr.status === 200) {
+                        const blob = xhr.response;
+                        const downloadUrl = URL.createObjectURL(blob);
+                        
+                        const a = document.createElement('a');
+                        a.href = downloadUrl;
+                        a.download = filename || `file_${Date.now()}`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        
+                        setTimeout(() => {
+                            URL.revokeObjectURL(downloadUrl);
+                        }, 100);
+                        
+                        this.statusElement.textContent = 'Download complete!';
+                    } else {
+                        this.showError('Download failed with status: ' + xhr.status);
+                    }
+                });
+                
+                xhr.addEventListener('error', () => {
+                    this.showError('Download failed. Please try again.');
+                });
+                
+                xhr.open('GET', url);
+                xhr.send();
+                
+                this.statusElement.textContent = 'Downloading...';
+                this.downloadBtn.style.display = 'none';
+            }
+            
+            updateProgress(data) {
+                const progress = data.progress || (data.loaded / data.total) * 100;
+                this.progressBar.style.width = `${progress}%`;
+                
+                // Calculate download speed
+                const now = Date.now();
+                const timeDiff = (now - this.lastTime) / 1000; // in seconds
+                if (timeDiff > 0.5) { // Update every 0.5s
+                    const loadedDiff = data.loaded - this.lastLoaded;
+                    const speed = (loadedDiff / (1024 * 1024)) / timeDiff; // MB/s
+                    
+                    this.speedElement.textContent = `Speed: ${speed.toFixed(2)} MB/s`;
+                    
+                    this.lastLoaded = data.loaded;
+                    this.lastTime = now;
+                }
+                
+                // Update status text
+                const downloadedMB = (data.loaded / (1024 * 1024)).toFixed(2);
+                const totalMB = (data.total / (1024 * 1024)).toFixed(2);
+                this.statusElement.textContent = `Downloading: ${downloadedMB}MB / ${totalMB}MB`;
+            }
+            
+            extractFileName(url) {
+                try {
+                    const pathname = new URL(url).pathname;
+                    return pathname.split('/').pop();
+                } catch {
+                    return null;
+                }
+            }
+            
+            showError(message) {
+                this.errorElement.textContent = message;
+                this.errorElement.style.display = 'block';
+                this.statusElement.textContent = 'Download failed';
+                this.downloadBtn.style.display = 'inline-block';
+            }
+        }
+        
+        // Initialize downloader
+        document.addEventListener('DOMContentLoaded', () => {
+            const downloader = new SmartDownloader();
+        });
+    </script>
+</body>
+</html>
