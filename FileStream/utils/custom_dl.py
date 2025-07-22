@@ -1,44 +1,62 @@
+import math
 import asyncio
 import logging
+from info import *
 from typing import Dict, Union
-from FileStream.bot import work_loads
+from TechVJ.bot import work_loads
 from pyrogram import Client, utils, raw
-from .file_properties import get_file_ids
+from TechVJ.util.file_properties import get_file_ids
 from pyrogram.session import Session, Auth
 from pyrogram.errors import AuthBytesInvalid
+from TechVJ.server.exceptions import FIleNotFound
 from pyrogram.file_id import FileId, FileType, ThumbnailSource
-from pyrogram.types import Message
+
 
 class ByteStreamer:
     def __init__(self, client: Client):
+        """A custom class that holds the cache of a specific client and class functions.
+        attributes:
+            client: the client that the cache is for.
+            cached_file_ids: a dict of cached file IDs.
+            cached_file_properties: a dict of cached file properties.
+        
+        functions:
+            generate_file_properties: returns the properties for a media of a specific message contained in Tuple.
+            generate_media_session: returns the media session for the DC that contains the media file.
+            yield_file: yield a file from telegram servers for streaming.
+            
+        This is a modified version of the <https://github.com/eyaadh/megadlbot_oss/blob/master/mega/telegram/utils/custom_download.py>
+        Thanks to Eyaadh <https://github.com/eyaadh>
+        """
         self.clean_timer = 30 * 60
         self.client: Client = client
-        self.cached_file_ids: Dict[str, FileId] = {}
+        self.cached_file_ids: Dict[int, FileId] = {}
         asyncio.create_task(self.clean_cache())
 
-    async def get_file_properties(self, db_id: str, multi_clients) -> FileId:
+    async def get_file_properties(self, id: int) -> FileId:
         """
         Returns the properties of a media of a specific message in a FIleId class.
         if the properties are cached, then it'll return the cached results.
         or it'll generate the properties from the Message ID and cache them.
         """
-        if not db_id in self.cached_file_ids:
-            logging.debug("Before Calling generate_file_properties")
-            await self.generate_file_properties(db_id, multi_clients)
-            logging.debug(f"Cached file properties for file with ID {db_id}")
-        return self.cached_file_ids[db_id]
+        if id not in self.cached_file_ids:
+            await self.generate_file_properties(id)
+            logging.debug(f"Cached file properties for message with ID {id}")
+        return self.cached_file_ids[id]
     
-    async def generate_file_properties(self, db_id: str, multi_clients) -> FileId:
+    async def generate_file_properties(self, id: int) -> FileId:
         """
         Generates the properties of a media file on a specific message.
         returns ths properties in a FIleId class.
         """
-        logging.debug("Before calling get_file_ids")
-        file_id = await get_file_ids(self.client, db_id, multi_clients, Message)
-        logging.debug(f"Generated file ID and Unique ID for file with ID {db_id}")
-        self.cached_file_ids[db_id] = file_id
-        logging.debug(f"Cached media file with ID {db_id}")
-        return self.cached_file_ids[db_id]
+        file_id = await get_file_ids(self.client, LOG_CHANNEL, id)
+        logging.debug(f"Generated file ID and Unique ID for message with ID {id}")
+        if not file_id:
+            logging.debug(f"Message with ID {id} not found")
+            raise FIleNotFound
+        self.cached_file_ids[id] = file_id
+        logging.debug(f"Cached media message with ID {id}")
+        return self.cached_file_ids[id]
 
     async def generate_media_session(self, client: Client, file_id: FileId) -> Session:
         """
@@ -67,7 +85,7 @@ class ByteStreamer:
                     )
 
                     try:
-                        await media_session.invoke(
+                        await media_session.send(
                             raw.functions.auth.ImportAuthorization(
                                 id=exported_auth.id, bytes=exported_auth.bytes
                             )
@@ -163,11 +181,10 @@ class ByteStreamer:
         media_session = await self.generate_media_session(client, file_id)
 
         current_part = 1
-
         location = await self.get_location(file_id)
 
         try:
-            r = await media_session.invoke(
+            r = await media_session.send(
                 raw.functions.upload.GetFile(
                     location=location, offset=offset, limit=chunk_size
                 ),
@@ -192,7 +209,7 @@ class ByteStreamer:
                     if current_part > part_count:
                         break
 
-                    r = await media_session.invoke(
+                    r = await media_session.send(
                         raw.functions.upload.GetFile(
                             location=location, offset=offset, limit=chunk_size
                         ),
@@ -200,7 +217,7 @@ class ByteStreamer:
         except (TimeoutError, AttributeError):
             pass
         finally:
-            logging.debug(f"Finished yielding file with {current_part} parts.")
+            logging.debug("Finished yielding file with {current_part} parts.")
             work_loads[index] -= 1
 
     
