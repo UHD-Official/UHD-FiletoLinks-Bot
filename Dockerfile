@@ -1,12 +1,12 @@
-FROM python:3.11
+FROM python:3.10.8-slim-buster
 
-WORKDIR /app
-COPY . /app
+RUN apt update && apt upgrade -y
+RUN apt install git -y
+COPY requirements.txt /requirements.txt
 
-RUN pip install --upgrade pip
-RUN pip install -r requirements.txt
-
-COPY .env .env
-COPY . .
-
-CMD ["python", "-m", "FileStream"]
+RUN cd /
+RUN pip3 install -U pip && pip3 install -U -r requirements.txt
+RUN mkdir /FileToLink
+WORKDIR /FileToLink
+COPY . /FileToLink
+CMD ["python", "bot.py"]
