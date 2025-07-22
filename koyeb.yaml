@@ -1,0 +1,7 @@
+env:
+  - key: FQDN
+    value: "horrible-gibbon-gdrives7511-2e5eec70.koyeb.app"
+  - key: HAS_SSL
+    value: "1"
+  - key: NO_PORT
+    value: "1"
